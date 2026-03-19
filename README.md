@@ -3,7 +3,17 @@
 A Flask-based REST API for managing inventory, with OpenFoodFacts API integration and a CLI interface.
 
 ---
+Run this in your terminal to install for the correct Python:
 
+~/.pyenv/versions/3.8.13/bin/pip install flask flask-cors requests
+
+Copy
+bash
+Then run tests with:
+
+~/.pyenv/versions/3.8.13/bin/pytest tests/ -v
+
+Copy
 ## Setup & Installation
 
 **Prerequisites:** Python 3.8+
