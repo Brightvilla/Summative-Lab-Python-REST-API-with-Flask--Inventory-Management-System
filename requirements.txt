@@ -1,0 +1,11 @@
+Flask==3.0.3
+Flask-Cors==5.0.0
+requests==2.32.4
+pytest==8.3.5
+Faker==35.2.2
+f you want to be ultra-minimal and follow README literally, you could also drop Faker (pytest will still load the plugin globally) and just put:
+
+Flask
+Flask-Cors
+requests
+pytest
