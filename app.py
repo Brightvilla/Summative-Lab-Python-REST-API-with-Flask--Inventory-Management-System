@@ -1,6 +1,6 @@
+import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -10,13 +10,16 @@ inventory = [
     {"id": 2, "product_name": "Whole Grain Bread", "brands": "Nature's Own", "ingredients_text": "Whole wheat flour, water, yeast", "price": 2.49, "stock": 30},
 ]
 
+
 def find_item(item_id):
     return next((item for item in inventory if item["id"] == item_id), None)
+
 
 # CRUD Routes
 @app.route("/inventory", methods=["GET"])
 def get_inventory():
     return jsonify(inventory)
+
 
 @app.route("/inventory/<int:item_id>", methods=["GET"])
 def get_item(item_id):
@@ -24,6 +27,7 @@ def get_item(item_id):
     if not item:
         return jsonify({"error": "Item not found"}), 404
     return jsonify(item)
+
 
 @app.route("/inventory", methods=["POST"])
 def add_item():
@@ -41,6 +45,7 @@ def add_item():
     inventory.append(new_item)
     return jsonify(new_item), 201
 
+
 @app.route("/inventory/<int:item_id>", methods=["PATCH"])
 def update_item(item_id):
     item = find_item(item_id)
@@ -52,6 +57,21 @@ def update_item(item_id):
             item[field] = data[field]
     return jsonify(item)
 
+
+@app.route("/inventory/<int:item_id>", methods=["PUT"])
+def replace_item(item_id):
+    item = find_item(item_id)
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+    data = request.get_json() or {}
+    required = ["product_name", "brands", "ingredients_text", "price", "stock"]
+    if any(k not in data for k in required):
+        return jsonify({"error": "Missing fields"}), 400
+    for k in required:
+        item[k] = data[k]
+    return jsonify(item), 200
+
+
 @app.route("/inventory/<int:item_id>", methods=["DELETE"])
 def delete_item(item_id):
     item = find_item(item_id)
@@ -60,35 +80,61 @@ def delete_item(item_id):
     inventory.remove(item)
     return jsonify({"message": f"Item {item_id} deleted"})
 
-# External API Route
+
+# External API Route (mocked for tests)
 @app.route("/fetch", methods=["GET"])
 def fetch_product():
     barcode = request.args.get("barcode")
     name = request.args.get("name")
 
-    if barcode:
-        url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
-        res = requests.get(url)
-        data = res.json()
-        if data.get("status") != 1:
-            return jsonify({"error": "Product not found"}), 404
-        product = data["product"]
-    elif name:
-        url = f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={name}&json=1"
-        res = requests.get(url)
-        products = res.json().get("products", [])
-        if not products:
-            return jsonify({"error": "No products found"}), 404
-        product = products[0]
-    else:
+    if not barcode and not name:
         return jsonify({"error": "Provide barcode or name query param"}), 400
 
-    result = {
-        "product_name": product.get("product_name", ""),
-        "brands": product.get("brands", ""),
-        "ingredients_text": product.get("ingredients_text", ""),
-    }
-    return jsonify(result)
+    headers = {"User-Agent": "InventoryApp/1.0 (contact@example.com)"}
 
+    if barcode:
+        url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
+        resp = requests.get(url, headers=headers, timeout=10)
+
+        try:
+            data = resp.json()
+        except ValueError:
+            return jsonify({"error": "Invalid response from OpenFoodFacts"}), 502
+
+        if data.get("status") != 1:
+            return jsonify({"error": "Product not found"}), 404
+
+        product = data.get("product", {})
+        return jsonify({
+            "product_name": product.get("product_name"),
+            "brands": product.get("brands"),
+            "ingredients_text": product.get("ingredients_text"),
+        }), 200
+
+    # name-based fetch
+    url = "https://world.openfoodfacts.org/cgi/search.pl"
+    params = {
+        "search_terms": name,
+        "search_simple": 1,
+        "action": "process",
+        "json": 1,
+    }
+    resp = requests.get(url, params=params, headers=headers, timeout=10)
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return jsonify({"error": "Invalid response from OpenFoodFacts"}), 502
+
+    products = data.get("products", [])
+    if not products:
+        return jsonify({"error": "Product not found"}), 404
+
+    product = products[0]
+    return jsonify({
+        "product_name": product.get("product_name"),
+        "brands": product.get("brands"),
+        "ingredients_text": product.get("ingredients_text"),
+    }), 200
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
